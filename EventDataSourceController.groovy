@@ -1,6 +1,4 @@
 package com.openprisetech
-
-
 import com.openprisetech.core.exception.ErrorCodes
 import com.openprisetech.core.exception.OPException
 import com.openprisetech.enums.AuthType
@@ -1454,104 +1452,133 @@ class EventDataSourceController extends OpSecuredRestfulController{
 		render([message: 'SUCCESS'] as JSON)
 	}
 	
-	
-
-	
 	def runNow() {
-		if(!isUserAuthorized()) {
-			render(status: 401, errors: 'Unauthorized') as JSON
-			return
-		}
-
-		def user = tenantService.currentUser
-		def tenantName = tenantService.userTenant
-		def id = params.EventDataSourceId ? params.EventDataSourceId.toLong() : -1
-
-		EventDataSource ds = EventDataSource.get(id)
-		if(ds == null){
-			render(status: 404, errors: 'Not Found') as JSON
-			return
-		}
-		def userIsAdmin = Administrators.isUserAdmin(user, ds)
-		if(!userIsAdmin) {
-			userIsAdmin = ds.dataSourceAdmin.id == user.id
-		}
-		if(!userIsAdmin || ds.tenantName != tenantName) {
-			render(status: 403, errors: 'Forbidden') as JSON
-			return;
-		}
-		boolean reSync = params.reSync? params.reSync.toBoolean(): false
-		boolean isReSyncDeleteDetectionOnly = (reSync && params.isReSyncDeleteDetectionOnly)? params.isReSyncDeleteDetectionOnly.toBoolean(): false
-		boolean reSyncWithFilter = params.reSyncWithFilter? params.reSyncWithFilter.toBoolean(): false
-		boolean isReSyncDeleteDetectionWithFilter = params.isReSyncDeleteDetectionWithFilter? params.isReSyncDeleteDetectionWithFilter.toBoolean(): false //edit here
-		boolean isFilterEnabled = false
-		if(reSyncWithFilter || isReSyncDeleteDetectionWithFilter){
-			isFilterEnabled = true
-			if(isReSyncDeleteDetectionWithFilter){
-				reSync = true
-				isReSyncDeleteDetectionOnly = true
+		try
+		{
+			if(!isUserAuthorized()) {
+				render(status: 401, errors: 'Unauthorized') as JSON
+				return
 			}
-			else if(reSyncWithFilter){
-				reSync = true
-			}
-		}
-		def filterString = (params.filters?.size() > 0)? (new JsonSlurper().parseText(params.filters)): null
-		def filterOperator = filterString? (filterString[0].operator? filterString[0].operator.toString():'') : ''
-		Map filterDateValue = null
-		if(filterString){
-			if(filterString[0].values[0].size() == 2){
 
-				def toDate = filterString[0].values[0].to_value? filterString[0].values[0].to_value.toString():''
-				def fromDate = filterString[0].values[0].from_value? filterString[0].values[0].from_value.toString():''
-				filterDateValue = [fromDate:fromDate, toDate:toDate]
+			def user = tenantService.currentUser
+			def tenantName = tenantService.userTenant
+			def id = params.EventDataSourceId ? params.EventDataSourceId.toLong() : -1
+
+			EventDataSource ds = EventDataSource.get(id)
+			if(ds == null){
+				render(status: 404, errors: 'Not Found') as JSON
+				return
+			}
+			def userIsAdmin = Administrators.isUserAdmin(user, ds)
+			if(!userIsAdmin) {
+				userIsAdmin = ds.dataSourceAdmin.id == user.id
+			}
+			if(!userIsAdmin || ds.tenantName != tenantName) {
+				render(status: 403, errors: 'Forbidden') as JSON
+				return;
+			}
+			boolean reSync = params.reSync? params.reSync.toBoolean(): false
+			boolean isReSyncDeleteDetectionOnly = (reSync && params.isReSyncDeleteDetectionOnly)? params.isReSyncDeleteDetectionOnly.toBoolean(): false
+			boolean reSyncWithFilter = params.reSyncWithFilter? params.reSyncWithFilter.toBoolean(): false
+			boolean isReSyncDeleteDetectionWithFilter = params.isReSyncDeleteDetectionWithFilter? params.isReSyncDeleteDetectionWithFilter.toBoolean(): false //edit here
+			boolean isFilterEnabled = false
+			if(reSyncWithFilter || isReSyncDeleteDetectionWithFilter){
+				isFilterEnabled = true
+				if(isReSyncDeleteDetectionWithFilter){
+					reSync = true
+					isReSyncDeleteDetectionOnly = true
+				}
+				else if(reSyncWithFilter){
+					reSync = true
+				}
+			}
+			def filterString = (params.filters?.size() > 0)? (new JsonSlurper().parseText(params.filters)): null
+			def filterOperator = filterString? (filterString[0].operator? filterString[0].operator.toString():'') : ''
+			Map filterDateValue = null
+			if(filterString){
+				if(filterString[0].values[0].size() == 2){
+
+					def toDate = filterString[0].values[0].to_value? filterString[0].values[0].to_value.toString():''
+					def fromDate = filterString[0].values[0].from_value? filterString[0].values[0].from_value.toString():''
+					filterDateValue = [fromDate:fromDate, toDate:toDate]
+				}else{
+					def DateValue = filterString? (filterString[0].values[0].value? filterString[0].values[0].value.toString():'') : ''
+					filterDateValue = [Date:DateValue]
+				}
+			}
+			def filterField = filterString? (filterString[0].field? filterString[0].field.toString():'') : ''
+
+			switch (filterOperator){
+				case "equals":
+					filterOperator = "="
+					break
+				case "greater_than":
+					filterOperator = ">"
+					break
+				case "greater_than_or_equals":
+					filterOperator = ">="
+					break
+				case "less_than":
+					filterOperator = "<"
+					break
+				case "less_than_or_equals":
+					filterOperator = "<="
+					break
+				default:
+					break;
+			}
+			Map additionalParams
+			if(isFilterEnabled == true){
+				additionalParams = [reSync: reSync, isReSyncDeleteDetectionOnly: isReSyncDeleteDetectionOnly, isFilterEnabled: isFilterEnabled, filterOperator: filterOperator, filterDateValue: filterDateValue, filterField: filterField]
 			}else{
-			    def DateValue = filterString? (filterString[0].values[0].value? filterString[0].values[0].value.toString():'') : ''
-			    filterDateValue = [Date:DateValue]
+				additionalParams = [reSync: reSync, isReSyncDeleteDetectionOnly: isReSyncDeleteDetectionOnly]
 			}
-		}
-		def filterField = filterString? (filterString[0].field? filterString[0].field.toString():'') : ''
 
-		switch (filterOperator){
-			case "equals":
-				filterOperator = "="
-				break
-			case "greater_than":
-				filterOperator = ">"
-				break
-			case "greater_than_or_equals":
-				filterOperator = ">="
-				break
-			case "less_than":
-				filterOperator = "<"
-				break
-			case "less_than_or_equals":
-				filterOperator = "<="
-				break
-			default:
-				break;
-		}
-		Map additionalParams
-		if(isFilterEnabled == true){
-			additionalParams = [reSync: reSync, isReSyncDeleteDetectionOnly: isReSyncDeleteDetectionOnly, isFilterEnabled: isFilterEnabled, filterOperator: filterOperator, filterDateValue: filterDateValue, filterField: filterField]
-		}else{
-			additionalParams = [reSync: reSync, isReSyncDeleteDetectionOnly: isReSyncDeleteDetectionOnly]
-		}
-
-		def retval = eventDataSourceService.importDS(ds , user, null, additionalParams, null)
-		if(retval?.errors){
-			if(retval.message == 'InsufficientServiceQuota') {
-				render(status: 409, text: 'InsufficientServiceQuota') as JSON
-				return
-			} else {
-				response.status = 409
-				render([message: retval.message] as JSON)
-				return
+			def retval = eventDataSourceService.importDS(ds , user, null, additionalParams, null)
+			if(retval?.errors){
+				if(retval.message == 'InsufficientServiceQuota') {
+					render(status: 409, text: 'InsufficientServiceQuota') as JSON
+					return
+				} else {
+					response.status = 409
+					render([message: retval.message] as JSON)
+					return
+				}
 			}
+			render retval as JSON
 		}
-		render retval as JSON
+		catch( Exception ex){
+			def maxretries=2
+			def latetime= 5000 // means 5 seconds
+			def retries=0
+			while(retries< maxretries){
+				try {
+					TimeUnit.MILLISECONDS.sleep(latetime)
+					def retval = eventDataSourceService.importDS(ds, user, null, additionalParams, null)
+					if (retval?.errors) {
+						if (retval.message == 'InsufficientServiceQuota') {
+							render(status: 409, text: 'InsufficientServiceQuota') as JSON
+							return
+						} else {
+							response.status = 409
+							render([message: retval.message] as JSON)
+							return
+						}
+					}
+					render retval as JSON
+					return
+				}
+				catch( Exception ex2){
+					retries++;
+					if(retries == maxretries){
+						render(status:500, errors:'Reaching maximum retries') as JSON
+						return
+					}
+				}
+			}
+
+		}
 	}
-	 
-
 
 	def cancelSchedule() {
 		if(!isUserAuthorized()) {
