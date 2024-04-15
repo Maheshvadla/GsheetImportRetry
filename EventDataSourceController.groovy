@@ -1,6 +1,4 @@
 package com.openprisetech
-
-
 import com.openprisetech.core.exception.ErrorCodes
 import com.openprisetech.core.exception.OPException
 import com.openprisetech.enums.AuthType
